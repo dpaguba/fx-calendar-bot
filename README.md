@@ -1,34 +1,115 @@
-# 📈 js-forex-news-discord-bot
+# fx-calendar-bot
 
-Welcome to the **js-forex-news-discord-bot** repository! 🎉
+A Discord bot that posts a daily Forex economic calendar digest and sends 15-minute reminders before high-impact news events. Supports multiple Discord servers.
 
-This bot is designed to send Forex news directly to your Discord server upon receiving the `/news` command. It fetches the latest Forex news for all currency pairs for the current day, keeping you updated and informed! 🌐
+## Features
 
-## 💼 Features
+- **Daily digest at 07:00 Berlin time (Mon–Fri)** — lists all upcoming High/Medium impact events for USD, EUR, GBP, and JPY
+- **15-minute reminders** — automatically fires before each event; no polling, uses a single `setTimeout` per event scheduled at startup
+- **Multi-server support** — each server configures its own channel via `/setup`
+- **Data source** — [Forex Factory](https://www.forexfactory.com) weekly XML calendar feed
 
-- 💬 Sends messages in Discord with the latest Forex news
-- 🗓️ Provides news for each Forex pair for the current day
-- ⚡ Quick and easy setup
+## Commands
 
-## ⚙️ How It Works
+| Command | Permission | Description |
+|---------|------------|-------------|
+| `/setup #channel` | Manage Server | Set the channel where the bot will post news |
+| `/remove` | Manage Server | Stop the bot from posting on this server |
 
-1. Use the `/news` command in your Discord server.
-2. The bot fetches the latest Forex news for the day.
-3. It sends a message containing the news for each Forex pair directly in the channel.
+## Setup
 
-### 📺 Screenshots
+### 1. Create the Discord application
 
-![Bildschirmfoto 2024-07-08 um 09 11 39](https://github.com/dpaguba/js-forex-news-discord-bot/assets/88382171/0f22dbf1-11ca-49f1-94f3-899bc6851cdd)
+1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
+2. **New Application** → give it a name
+3. **Bot** → **Reset Token** → copy the token
+4. **OAuth2 → URL Generator** → check `bot` and `applications.commands` scopes → check `Send Messages` and `Embed Links` permissions → open the generated URL to invite the bot to your server
 
-## 📝 Usage
+### 2. Create the MongoDB database
 
-- In your Discord server, type the `/news` command.
-- The bot will respond with the latest Forex news for each currency pair for the current day.
+1. Create a free cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
+2. **Connect → Drivers** → copy the connection string
+3. Replace `<password>` in the URI with your database user password
 
-## 🏛️ History
+### 3. Configure environment variables
 
-We launched this bot and used it actively in our Discord server and used it for two months. It served us well during that period, providing timely Forex news updates. However, we have since stopped using it.
+```bash
+cp .env.example .env
+```
 
-Happy Trading! 💸🚀
+Fill in `.env`:
 
+```env
+DISCORD_TOKEN=        # Bot token from Discord Developer Portal
+CLIENT_ID=            # Application ID from Discord Developer Portal (General Information)
+MONGODB_URI=          # MongoDB Atlas connection string
+```
 
+### 4. Deploy slash commands to Discord
+
+```bash
+npm run deploy
+```
+
+> For testing, set `DEV_GUILD_ID` in `.env` to your server ID — commands appear instantly instead of taking up to 1 hour globally.
+
+### 5. Start the bot
+
+```bash
+npm start
+```
+
+On your Discord server, run `/setup #your-channel`. The bot will post the digest every weekday at 07:00 Berlin time.
+
+## Local development
+
+```bash
+npm run dev          # Start with --watch (auto-restart on file changes)
+```
+
+Set `RUN_ON_START=true` in `.env` to trigger the morning job immediately on startup — useful for testing the digest and reminder flow without waiting until 07:00.
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_TOKEN` | Yes | Bot token from Discord Developer Portal |
+| `CLIENT_ID` | Yes | Application ID used to deploy slash commands |
+| `MONGODB_URI` | Yes | MongoDB connection string (Atlas free tier works) |
+| `DEV_GUILD_ID` | No | Deploy commands to a specific server instantly (testing) |
+| `RUN_ON_START` | No | Run the morning job on bot startup (`true`/`false`, default `false`) |
+
+## Architecture
+
+```
+src/
+├── index.js              # Entry point: connects DB, loads commands, logs in
+├── config.js             # Environment variables and constants
+├── scheduler.js          # Cron job at 07:00 + per-event setTimeout reminders
+├── db/
+│   ├── connection.js     # MongoDB connection
+│   └── guildRepository.js# CRUD for guild → channel mappings
+├── commands/
+│   ├── setup.js          # /setup command
+│   └── remove.js         # /remove command
+├── services/
+│   ├── calendar.js       # Fetches and parses Forex Factory XML feed
+│   └── notifier.js       # Posts embeds to Discord channels
+├── formatters/
+│   └── embeds.js         # Builds Discord EmbedBuilder objects
+└── utils/
+    └── logger.js         # Timestamped console logger
+scripts/
+└── deploy-commands.js    # One-time script to register slash commands
+```
+
+## Deployment
+
+The `Procfile` is configured for [Railway](https://railway.app):
+
+1. Push to GitHub
+2. Connect the repo on Railway
+3. Set environment variables in Railway dashboard
+4. Railway runs `node src/index.js` automatically
+
+Run `npm run deploy` once after first deploy to register slash commands.
